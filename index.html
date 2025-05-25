@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chromatic Command</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000033">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: manipulation;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(45deg, #000033, #000066, #003366);
+            background-size: 400% 400%;
+            animation: gradientFlow 10s ease infinite;
+            overflow: hidden;
+            height: 100vh;
+            color: #00ffff;
+        }
+
+        @keyframes gradientFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .game-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 15px;
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+
+        .hud-item {
+            color: #00ffff;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+        }
+
+        .game-board {
+            width: min(90vw, 90vh);
+            height: min(90vw, 90vh);
+            max-width: 600px;
+            max-height: 600px;
+            position: relative;
+            background: rgba(0, 0, 0, 0.8);
+            border: 3px solid #00ffff;
+            border-radius: 20px;
+            box-shadow: 
+                0 0 30px rgba(0, 255, 255, 0.6),
+                inset 0 0 30px rgba(0, 255, 255, 0.2);
+            overflow: hidden;
+        }
+
+        .grid {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            gap: 2px;
+            padding: 10px;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+        }
+
+        .cell {
+            background: linear-gradient(135deg, #001122, #002244);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 8px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 0 0 10px currentColor;
+        }
+
+        .cell:hover {
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.8);
+            transform: scale(1.05);
+        }
+
+        .cell.revealed {
+            background: linear-gradient(135deg, #003366, #004488);
+            animation: cellReveal 0.5s ease-out;
+        }
+
+        @keyframes cellReveal {
+            from {
+                transform: scale(0) rotate(180deg);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+        }
+
+        .cell.mine {
+            background: radial-gradient(circle, #ff0000, #990000);
+            animation: mineExplode 1s ease-out;
+        }
+
+        @keyframes mineExplode {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.5); box-shadow: 0 0 30px #ff0000; }
+            100% { transform: scale(1); }
+        }
+
+        .player-ship {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, #00ffff, #0088ff);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            transform: rotate(-45deg);
+            box-shadow: 
+                0 0 20px rgba(0, 255, 255, 0.8),
+                inset 0 0 10px rgba(255, 255, 255, 0.5);
+            z-index: 50;
+            transition: all 0.2s ease;
+            animation: shipPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes shipPulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 255, 0.8); }
+            50% { box-shadow: 0 0 30px rgba(0, 255, 255, 1); }
+        }
+
+        .projectile {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            z-index: 40;
+            box-shadow: 0 0 10px currentColor;
+            animation: projectileTrail 0.1s ease-out;
+        }
+
+        @keyframes projectileTrail {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .enemy {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+            z-index: 30;
+            animation: enemyFloat 3s ease-in-out infinite;
+        }
+
+        @keyframes enemyFloat {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(180deg); }
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        .explosion {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #ffff00, #ff8800, transparent);
+            animation: explode 0.6s ease-out forwards;
+            z-index: 60;
+        }
+
+        @keyframes explode {
+            0% { transform: scale(0); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .color-selector {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 15px;
+            border: 2px solid #00ffff;
+        }
+
+        .color-btn {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #ffffff;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .color-btn:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 20px currentColor;
+        }
+
+        .color-btn.active {
+            box-shadow: 0 0 25px currentColor;
+            animation: colorPulse 1s ease-in-out infinite;
+        }
+
+        @keyframes colorPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .red { background: #ff0000; }
+        .blue { background: #0066ff; }
+        .green { background: #00ff00; }
+        .yellow { background: #ffff00; }
+        .purple { background: #8800ff; }
+        .orange { background: #ff8800; }
+        .white { background: #ffffff; }
+
+        .menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 51, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .menu h1 {
+            font-size: 48px;
+            color: #00ffff;
+            text-shadow: 0 0 20px rgba(0, 255, 255, 0.8);
+            margin-bottom: 30px;
+            animation: titleGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes titleGlow {
+            0%, 100% { text-shadow: 0 0 20px rgba(0, 255, 255, 0.8); }
+            50% { text-shadow: 0 0 40px rgba(0, 255, 255, 1); }
+        }
+
+        .menu-btn {
+            background: linear-gradient(135deg, #003366, #006699);
+            color: #ffffff;
+            border: 2px solid #00ffff;
+            border-radius: 15px;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        .menu-btn:hover {
+            background: linear-gradient(135deg, #006699, #0099cc);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .difficulty-selector {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .hud {
+                font-size: 14px;
+                padding: 10px;
+            }
+            
+            .color-btn {
+                width: 40px;
+                height: 40px;
+            }
+            
+            .menu h1 {
+                font-size: 36px;
+            }
+            
+            .cell {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="menu" id="mainMenu">
+        <h1>CHROMATIC COMMAND</h1>
+        <p style="color: #00ffff; text-align: center; margin-bottom: 30px; font-size: 18px;">
+            Decodifica l'universo quantico con colori, numeri e lettere!
+        </p>
+        
+        <div class="difficulty-selector">
+            <button class="menu-btn" onclick="startGame('easy')">🚀 BAMBINI (5-8)</button>
+            <button class="menu-btn" onclick="startGame('medium')">⚡ GIOVANI (9-25)</button>
+            <button class="menu-btn" onclick="startGame('hard')">🔥 ADULTI (26-65)</button>
+            <button class="menu-btn" onclick="startGame('expert')">🧠 ESPERTI (65+)</button>
+        </div>
+        
+        <button class="menu-btn" onclick="showInstructions()">📖 ISTRUZIONI</button>
+    </div>
+
+    <div class="game-container hidden" id="gameContainer">
+        <div class="hud">
+            <div class="hud-item">LIVELLO: <span id="level">1</span></div>
+            <div class="hud-item">PUNTEGGIO: <span id="score">0</span></div>
+            <div class="hud-item">VITE: <span id="lives">3</span></div>
+            <div class="hud-item">FASE: <span id="phase">ESPLORAZIONE</span></div>
+        </div>
+
+        <div class="game-board">
+            <div class="grid" id="gameGrid"></div>
+            <div class="player-ship" id="playerShip"></div>
+        </div>
+
+        <div class="color-selector">
+            <div class="color-btn red active" onclick="selectColor('red')" data-color="red"></div>
+            <div class="color-btn blue" onclick="selectColor('blue')" data-color="blue"></div>
+            <div class="color-btn green" onclick="selectColor('green')" data-color="green"></div>
+            <div class="color-btn yellow" onclick="selectColor('yellow')" data-color="yellow"></div>
+            <div class="color-btn purple" onclick="selectColor('purple')" data-color="purple"></div>
+            <div class="color-btn orange" onclick="selectColor('orange')" data-color="orange"></div>
+            <div class="color-btn white" onclick="selectColor('white')" data-color="white"></div>
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        let gameState = {
+            level: 1,
+            score: 0,
+            lives: 3,
+            phase: 'exploration', // exploration, combat, puzzle
+            difficulty: 'medium',
+            gridSize: 8,
+            playerPos: { x: 0, y: 0 },
+            selectedColor: 'red',
+            grid: [],
+            enemies: [],
+            projectiles: [],
+            particles: [],
+            isGameRunning: false,
+            mines: [],
+            revealedCells: [],
+            gameBoard: null,
+            playerShip: null
+        };
+
+        // Audio Context
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Sound Effects
+        function playSound(frequency, duration, type = 'sine', volume = 0.1) {
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            oscillator.type = type;
+            
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        function playShootSound() {
+            playSound(800, 0.1, 'square', 0.15);
+        }
+
+        function playExplosionSound() {
+            playSound(200, 0.3, 'sawtooth', 0.2);
+            setTimeout(() => playSound(100, 0.3, 'triangle', 0.15), 100);
+        }
+
+        function playPickupSound() {
+            playSound(600, 0.2, 'sine', 0.1);
+            setTimeout(() => playSound(800, 0.15, 'sine', 0.08), 150);
+        }
+
+        function playMineSound() {
+            playSound(150, 0.5, 'sawtooth', 0.25);
+        }
+
+        // Initialize Game
+        function initGame() {
+            gameState.gameBoard = document.getElementById('gameContainer');
+            gameState.playerShip = document.getElementById('playerShip');
+            
+            createGrid();
+            generateLevel();
+            updateHUD();
+            gameLoop();
+        }
+
+        function createGrid() {
+            const grid = document.getElementById('gameGrid');
+            grid.innerHTML = '';
+            
+            gameState.grid = [];
+            for (let y = 0; y < gameState.gridSize; y++) {
+                gameState.grid[y] = [];
+                for (let x = 0; x < gameState.gridSize; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.x = x;
+                    cell.dataset.y = y;
+                    cell.addEventListener('click', () => handleCellClick(x, y));
+                    grid.appendChild(cell);
+                    
+                    gameState.grid[y][x] = {
+                        element: cell,
+                        revealed: false,
+                        isMine: false,
+                        number: 0,
+                        letter: '',
+                        hasEnemy: false
+                    };
+                }
+            }
+        }
+
+        function generateLevel() {
+            // Reset arrays
+            gameState.mines = [];
+            gameState.enemies = [];
+            gameState.revealedCells = [];
+            
+            // Generate mines based on difficulty
+            const mineCount = getDifficultySettings().mines;
+            const mines = [];
+            
+            while (mines.length < mineCount) {
+                const x = Math.floor(Math.random() * gameState.gridSize);
+                const y = Math.floor(Math.random() * gameState.gridSize);
+                
+                if (!mines.find(m => m.x === x && m.y === y) && !(x === 0 && y === 0)) {
+                    mines.push({ x, y });
+                    gameState.grid[y][x].isMine = true;
+                }
+            }
+            
+            gameState.mines = mines;
+            
+            // Calculate numbers for each cell
+            for (let y = 0; y < gameState.gridSize; y++) {
+                for (let x = 0; x < gameState.gridSize; x++) {
+                    if (!gameState.grid[y][x].isMine) {
+                        gameState.grid[y][x].number = countAdjacentMines(x, y);
+                    }
+                }
+            }
+            
+            // Generate letters for puzzle phase
+            generateLetterPuzzle();
+            
+            // Position player at start
+            positionPlayer(0, 0);
+        }
+
+        function getDifficultySettings() {
+            const settings = {
+                easy: { mines: 8, enemies: 3, gridSize: 6 },
+                medium: { mines: 12, enemies: 5, gridSize: 8 },
+                hard: { mines: 16, enemies: 7, gridSize: 10 },
+                expert: { mines: 10, enemies: 4, gridSize: 6 }
+            };
+            return settings[gameState.difficulty];
+        }
+
+        function countAdjacentMines(x, y) {
+            let count = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    if (nx >= 0 && nx < gameState.gridSize && ny >= 0 && ny < gameState.gridSize) {
+                        if (gameState.grid[ny][nx].isMine) count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        function generateLetterPuzzle() {
+            const words = ['FUTURE', 'QUANTUM', 'CHROME', 'NEXUS', 'CIPHER'];
+            const word = words[Math.floor(Math.random() * words.length)];
+            
+            // Place letters randomly
+            for (let i = 0; i < word.length; i++) {
+                let placed = false;
+                while (!placed) {
+                    const x = Math.floor(Math.random() * gameState.gridSize);
+                    const y = Math.floor(Math.random() * gameState.gridSize);
+                    
+                    if (!gameState.grid[y][x].isMine && !gameState.grid[y][x].letter) {
+                        gameState.grid[y][x].letter = word[i];
+                        placed = true;
+                    }
+                }
+            }
+        }
+
+        function positionPlayer(x, y) {
+            gameState.playerPos.x = x;
+            gameState.playerPos.y = y;
+            
+            const cellSize = gameState.gameBoard.querySelector('.cell').offsetWidth;
+            const gridElement = document.getElementById('gameGrid');
+            const gridRect = gridElement.getBoundingClientRect();
+            const gameRect = gameState.gameBoard.getBoundingClientRect();
+            
+            const playerX = (x * (cellSize + 2)) + (cellSize / 2) + 10;
+            const playerY = (y * (cellSize + 2)) + (cellSize / 2) + 10;
+            
+            gameState.playerShip.style.left = playerX + 'px';
+            gameState.playerShip.style.top = playerY + 'px';
+        }
+
+        function handleCellClick(x, y) {
+            if (gameState.phase === 'exploration') {
+                revealCell(x, y);
+            } else {
+                movePlayer(x, y);
+            }
+        }
+
+        function revealCell(x, y) {
+            const cell = gameState.grid[y][x];
+            
+            if (cell.revealed) return;
+            
+            cell.revealed = true;
+            cell.element.classList.add('revealed');
+            gameState.revealedCells.push({ x, y });
+            
+            if (cell.isMine) {
+                cell.element.classList.add('mine');
+                cell.element.textContent = '💣';
+                playMineSound();
+                loseLife();
+                return;
+            }
+            
+            // Show number if > 0
+            if (cell.number > 0) {
+                cell.element.textContent = cell.number;
+                cell.element.style.color = getNumberColor(cell.number);
+            }
+            
+            // Show letter if present
+            if (cell.letter) {
+                cell.element.textContent = cell.letter;
+                cell.element.style.color = '#ffff00';
+            }
+            
+            playPickupSound();
+            
+            // Auto-reveal empty cells
+            if (cell.number === 0 && !cell.letter) {
+                setTimeout(() => {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            const nx = x + dx;
+                            const ny = y + dy;
+                            if (nx >= 0 && nx < gameState.gridSize && ny >= 0 && ny < gameState.gridSize) {
+                                revealCell(nx, ny);
+                            }
+                        }
+                    }
+                }, 100);
+            }
+            
+            checkPhaseComplete();
+        }
+
+        function getNumberColor(num) {
+            const colors = ['', '#00ff00', '#ffff00', '#ff8800', '#ff0000', '#ff00ff', '#8800ff', '#0088ff', '#00ffff'];
+            return colors[num] || '#ffffff';
+        }
+
+        function movePlayer(x, y) {
+            positionPlayer(x, y);
+            playPickupSound();
+        }
+
+        function selectColor(color) {
+            gameState.selectedColor = color;
+            
+            // Update active color button
+            document.querySelectorAll('.color-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`.color-btn.${color}`).classList.add('active');
+            
+            playSound(400 + (color.length * 50), 0.1, 'triangle', 0.08);
+        }
+
+        function shoot(direction) {
+            if (!gameState.isGameRunning) return;
+            
+            const projectile = createProjectile(gameState.playerPos.x, gameState.playerPos.y, direction);
+            gameState.projectiles.push(projectile);
+            playShootSound();
+        }
+
+        function createProjectile(x, y, direction) {
+            const element = document.createElement('div');
+            element.className = 'projectile';
+            element.style.backgroundColor = getColorHex(gameState.selectedColor);
+            
+            const cellSize = gameState.gameBoard.querySelector('.cell').offsetWidth;
+            element.style.left = (x * (cellSize + 2)) + (cellSize / 2) + 10 + 'px';
+            element.style.top = (y * (cellSize + 2)) + (cellSize / 2) + 10 + 'px';
+            
+            gameState.gameBoard.appendChild(element);
+            
+            return {
+                element: element,
+                x: x,
+                y: y,
+                direction: direction,
+                color: gameState.selectedColor,
+                speed: 2
+            };
+        }
+
+        function getColorHex(color) {
+            const colors = {
+                red: '#ff0000',
+                blue: '#0066ff',
+                green: '#00ff00',
+                yellow: '#ffff00',
+                purple: '#8800ff',
+                orange: '#ff8800',
+                white: '#ffffff'
+            };
+            return colors[color] || '#ffffff';
+        }
+
+        function createExplosion(x, y) {
+            const explosion = document.createElement('div');
+            explosion.className = 'explosion';
+            explosion.style.left = x + 'px';
+            explosion.style.top = y + 'px';
+            gameState.gameBoard.appendChild(explosion);
+            
+            playExplosionSound();
+            
+            setTimeout(() => {
+                if (explosion.parentNode) {
+                    explosion.parentNode.removeChild(explosion);
+                }
+            }, 600);
+        }
+
+        function spawnEnemies() {
+            const enemyCount = getDifficultySettings().enemies;
+            
+            for (let i = 0; i < enemyCount; i++) {
+                setTimeout(() => {
+                    const enemy = createEnemy();
+                    gameState.enemies.push(enemy);
+                }, i * 1000);
+            }
+        }
+
+        function createEnemy() {
+            const colors = ['red', 'blue', 'green', 'yellow'];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            
+            const element = document.createElement('div');
+            element.className = 'enemy';
+            element.style.background = `linear-gradient(135deg, ${getColorHex(color)}, #000000)`;
+            element.style.boxShadow = `0 0 15px ${getColorHex(color)}`;
+            
+            // Random position on edges
+            let x, y;
+            const side = Math.floor(Math.random() * 4);
+            switch (side) {
+                case 0: x = 0; y = Math.floor(Math.random() * gameState.gridSize); break;
+                case 1: x = gameState.gridSize - 1; y = Math.floor(Math.random() * gameState.gridSize); break;
+                case 2: x = Math.floor(Math.random() * gameState.gridSize); y = 0; break;
+                case 3: x = Math.floor(Math.random() * gameState.gridSize); y = gameState.gridSize - 1; break;
+            }
+            
+            const cellSize = gameState.gameBoard.querySelector('.cell').offsetWidth;
+            element.style.left = (x * (cellSize + 2)) + 10 + 'px';
+            element.style.top = (y * (cellSize + 2)) + 10 + 'px';
+            
+            gameState.gameBoard.appendChild(element);
+            
+            return {
+                element: element,
+                x: x,
+                y: y,
+                color: color,
+                health: 1,
+                speed: 0.5,
+                direction: Math.random() * Math.PI * 2
+            };
+        }
+
+        function updateHUD() {
+            document.getElementById('level').textContent = gameState.level;
+            document.getElementById('score').textContent = gameState.score;
+            document.getElementById('lives').textContent = gameState.lives;
+            document.getElementById('phase').textContent = gameState.phase.toUpperCase();
+        }
+
+        function checkPhaseComplete() {
+            if (gameState.phase === 'exploration') {
+                // Check if enough cells revealed
+                const safeRevealedCount = gameState.revealedCells.filter(pos => 
+                    !gameState.grid[pos.y][pos.x].isMine
+                ).length;
+                
+                const totalSafeCells = (gameState.gridSize * gameState.gridSize) - gameState.mines.length;
+                
+                if (safeRevealedCount >= totalSafeCells * 0.7) {
+                    startCombatPhase();
+                }
+            } else if (gameState.phase === 'combat') {
+                if (gameState.enemies.length === 0) {
+                    startPuzzlePhase();
+                }
+            }
+        }
+
+        function startCombatPhase() {
+            gameState.phase = 'combat';
+            updateHUD();
+            spawnEnemies();
+        }
+
+        function startPuzzlePhase() {
+            gameState.phase = 'puzzle';
+            updateHUD();
+            // Show all letters for puzzle solving
+            revealAllLetters();
+        }
+
+        function revealAllLetters() {
+            for (let y = 0; y < gameState.gridSize; y++) {
+                for (let x = 0; x < gameState.gridSize; x++) {
+                    const cell = gameState.grid[y][x];
+                    if (cell.letter && !cell.revealed) {
+                        cell.revealed = true;
+                        cell.element.classList.add('revealed');
+                        cell.element.textContent = cell.letter;
+                        cell.element.style.color = '#ffff00';
+                    }
+                }
+            }
+        }
+
+        function loseLife() {
+            gameState.lives--;
+            updateHUD();
+            
+            if (gameState.lives <= 0) {
+                gameOver();
+            }
+        }
+
+        function gameOver() {
+            gameState.isGameRunning = false;
+            alert(`Game Over! Punteggio finale: ${gameState.score}`);
+            showMainMenu();
+        }
+
+        function nextLevel() {
+            gameState.level++;
+            gameState.score += 1000;
+            
+            // Increase difficulty slightly
+            if (gameState.level % 3 === 0 && gameState.gridSize < 12) {
+                gameState.gridSize++;
+            }
+            
+            createGrid();
+            generateLevel();
+            updateHUD();
+        }
+
+        function gameLoop() {
+            if (!gameState.isGameRunning) return;
+            
+            // Update projectiles
+            gameState.projectiles.forEach((projectile, index) => {
+                updateProjectile(projectile);
+                if (isProjectileOffScreen(projectile)) {
+                    removeProjectile(index);
+                }
+            });
+            
+            // Update enemies
+            gameState.enemies.forEach((enemy, index) => {
+                updateEnemy(enemy);
+            });
+            
+            // Check collisions
+            checkCollisions();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        function updateProjectile(projectile) {
+            const directions = {
+                up: { x: 0, y: -1 },
+                down: { x: 0, y: 1 },
+                left: { x: -1, y: 0 },
+                right: { x: 1, y: 0 }
+            };
+            
+            const dir = directions[projectile.direction] || { x: 0, y: -1 };
+            const currentLeft = parseFloat(projectile.element.style.left);
+            const currentTop = parseFloat(projectile.element.style.top);
+            
+            projectile.element.style.left = (currentLeft + dir.x * projectile.speed) + 'px';
+            projectile.element.style.top = (currentTop + dir.y * projectile.speed) + 'px';
+        }
+
+        function updateEnemy(enemy) {
+            // Simple AI: move towards player
+            const dx = gameState.playerPos.x - enemy.x;
+            const dy = gameState.playerPos.y - enemy.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > 0.5) {
+                enemy.x += (dx / distance) * enemy.speed * 0.1;
+                enemy.y += (dy / distance) * enemy.speed * 0.1;
+                
+                const cellSize = gameState.gameBoard.querySelector('.cell').offsetWidth;
+                enemy.element.style.left = (enemy.x * (cellSize + 2)) + 10 + 'px';
+                enemy.element.style.top = (enemy.y * (cellSize + 2)) + 10 + 'px';
+            }
+        }
+
+        function isProjectileOffScreen(projectile) {
+            const rect = projectile.element.getBoundingClientRect();
+            const boardRect = gameState.gameBoard.getBoundingClientRect();
+            
+            return rect.left < boardRect.left || rect.right > boardRect.right ||
+                   rect.top < boardRect.top || rect.bottom > boardRect.bottom;
+        }
+
+        function removeProjectile(index) {
+            const projectile = gameState.projectiles[index];
+            if (projectile && projectile.element.parentNode) {
+                projectile.element.parentNode.removeChild(projectile.element);
+            }
+            gameState.projectiles.splice(index, 1);
+        }
+
+        function checkCollisions() {
+            // Projectile-Enemy collisions
+            gameState.projectiles.forEach((projectile, pIndex) => {
+                gameState.enemies.forEach((enemy, eIndex) => {
+                    if (isColliding(projectile.element, enemy.element)) {
+                        // Create explosion
+                        const rect = enemy.element.getBoundingClientRect();
+                        createExplosion(rect.left, rect.top);
+                        
+                        // Remove enemy and projectile
+                        enemy.element.parentNode.removeChild(enemy.element);
+                        gameState.enemies.splice(eIndex, 1);
+                        removeProjectile(pIndex);
+                        
+                        // Add score
+                        gameState.score += 100;
+                        updateHUD();
+                        
+                        // Check if combat phase complete
+                        checkPhaseComplete();
+                    }
+                });
+            });
+        }
+
+        function isColliding(elem1, elem2) {
+            const rect1 = elem1.getBoundingClientRect();
+            const rect2 = elem2.getBoundingClientRect();
+            
+            return !(rect1.right < rect2.left || 
+                    rect1.left > rect2.right || 
+                    rect1.bottom < rect2.top || 
+                    rect1.top > rect2.bottom);
+        }
+
+        // Input handling
+        document.addEventListener('keydown', (e) => {
+            if (!gameState.isGameRunning) return;
+            
+            switch (e.code) {
+                case 'ArrowUp':
+                case 'KeyW':
+                    shoot('up');
+                    break;
+                case 'ArrowDown':
+                case 'KeyS':
+                    shoot('down');
+                    break;
+                case 'ArrowLeft':
+                case 'KeyA':
+                    shoot('left');
+                    break;
+                case 'ArrowRight':
+                case 'KeyD':
+                    shoot('right');
+                    break;
+                case 'Digit1': selectColor('red'); break;
+                case 'Digit2': selectColor('blue'); break;
+                case 'Digit3': selectColor('green'); break;
+                case 'Digit4': selectColor('yellow'); break;
+                case 'Digit5': selectColor('purple'); break;
+                case 'Digit6': selectColor('orange'); break;
+                case 'Digit7': selectColor('white'); break;
+            }
+        });
+
+        // Touch/Swipe handling for mobile
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        });
+
+        document.addEventListener('touchend', (e) => {
+            if (!gameState.isGameRunning) return;
+            
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+            
+            const minSwipeDistance = 50;
+            
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                if (Math.abs(deltaX) > minSwipeDistance) {
+                    shoot(deltaX > 0 ? 'right' : 'left');
+                }
+            } else {
+                if (Math.abs(deltaY) > minSwipeDistance) {
+                    shoot(deltaY > 0 ? 'down' : 'up');
+                }
+            }
+        });
+
+        // Game control functions
+        function startGame(difficulty) {
+            gameState.difficulty = difficulty;
+            gameState.gridSize = getDifficultySettings().gridSize;
+            gameState.isGameRunning = true;
+            gameState.phase = 'exploration';
+            
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('gameContainer').classList.remove('hidden');
+            
+            initGame();
+        }
+
+        function showMainMenu() {
+            document.getElementById('mainMenu').classList.remove('hidden');
+            document.getElementById('gameContainer').classList.add('hidden');
+            gameState.isGameRunning = false;
+        }
+
+        function showInstructions() {
+            alert(`CHROMATIC COMMAND - ISTRUZIONI:
+
+🎯 OBIETTIVO: Naviga attraverso le griglie quantiche usando proiettili colorati per rivelare segreti!
+
+🎮 CONTROLLI:
+- Tocca per muoverti
+- Swipe per sparare proiettili
+- Tasti freccia o WASD per sparare
+- Numeri 1-7 per cambiare colore
+
+🌈 COLORI:
+- ROSSO: Rivela celle nascoste
+- BLU: Congela nemici
+- VERDE: Ripara scudo
+- GIALLO: Illumina percorsi
+- VIOLA: Teletrasporto
+- ARANCIO: Esplosione a catena
+- BIANCO: Jolly universale
+
+📍 FASI:
+1. ESPLORAZIONE: Rivela celle senza toccare mine
+2. COMBATTIMENTO: Elimina nemici colorati
+3. PUZZLE: Decodifica le lettere nascoste
+
+⚡ SUGGERIMENTI:
+- I numeri indicano mine adiacenti
+- Combina colori per effetti speciali
+- Attenzione alle mine quantiche!`);
+        }
+
+        // PWA Installation
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+        });
+
+        // Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then((registration) => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch((registrationError) => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
